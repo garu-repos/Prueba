@@ -44,11 +44,142 @@ Los atributos de calidad definen el comportamiento del sistema y son críticos p
 | **Escalabilidad** | El módulo Batch debe estar diseñado para manejar un alto volumen de datos (varios miles o millones de deudores) sin degradar la performance. Debe soportar un crecimiento planificado en la cantidad de registros de movimiento (bitácora de gestión) que son voluminosos. |
 | **Usabilidad (Online)** | La navegación entre pantallas del operador (CU 9) debe ser sencilla, idealmente siguiendo flujos de trabajo predeterminados para presentar automáticamente la información necesaria (nombre, teléfono, deuda). |
 
+## 4. Diseño Conceptual del Módulo de Cobranza
+
+### 4.1. Representación Gráfica (Modelo Conceptual – Notación de Chen)
+
+El modelo se centra en la relación crítica entre el cliente deudor, la estrategia de cobranza asignada (Tipología) y el registro detallado de la tarea programada (Ticket/Gestión).
 
 
 
+```mermaid
+erDiagram
+    CLIENTE ||--|{ TIPOLOGIA_COBRANZA : "Asignación de Estrategia"
+    TIPOLOGIA_COBRANZA ||--|{ PROTOCOLO : "Definición de Reglas"
+    TIPOLOGIA_COBRANZA ||--o{ RECURSO : "Recursos Habilitados"
+    CLIENTE ||--|{ GESTION : "Tareas Programadas"
+    RECURSO ||--|{ GESTION : "Asignación de Recurso"
+    CARTERA ||--|{ CLIENTE : "Lote de Deudores"
 
+    CLIENTE {
+        string CodCliente PK
+        string NroDocumento
+        string Nombre
+        float MontoPendiente
+        int DiasMora
+        string ClasificacionRiesgo
+    }
 
+    TIPOLOGIA_COBRANZA {
+        string CodTipologia PK
+        string Descripcion
+        float MontoMin
+        float MontoMax
+        int MoraMin
+        int MoraMax
+    }
+
+    PROTOCOLO {
+        string CodProtocolo PK
+        int DuracionMaxDias
+        string CanalPreferente
+        string SecuenciaAcciones
+        string CodTipologia FK
+    }
+
+    RECURSO {
+        string CodRecurso PK
+        string TipoRecurso
+        int CapacidadDiaria
+        string HorarioDisp
+    }
+    
+    GESTION {
+        string IDTicket PK
+        datetime FechaHoraProgramada
+        string EstadoGestion
+        string Resultado
+        string CodCliente FK
+        string CodRecurso FK
+    }
+    
+    CARTERA {
+        string CodLote PK
+        string ClienteSponsor
+        date FechaRecepcion
+    }
+```
+
+### 4.2. Diccionario de Datos (Fichas de Tipos de Entidad)
+
+#### Entidad: CLIENTE (Deudor)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **CLIENTE** | Representa al deudor cuya cuenta está siendo gestionada por el módulo de cobranza. | Centralizar la información financiera y demográfica relevante para la gestión de la deuda. | **RF 10:** Debe contar con un código único (Cuenta o Código de Cliente). |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodCliente (PK)** | Código único del cliente en el sistema. | Clave principal y enlace a todas las gestiones y movimientos. | Texto (ej. CHAR 10) | Sí | Sí | No |
+| **NroDocumento** | Número de identificación (DNI, RUC). | Validación de identidad (CU 4) y búsqueda (Consulta Crítica). | Texto (ej. CHAR 15) | Sí | Sí | No |
+| **MontoPendiente** | Saldo total actual que el cliente adeuda. | Determinar la tipología de cobranza aplicable (CU 5) y el riesgo. | Dinero (Decimal 18,2) | Sí | No | No |
+| **DiasMora** | Cantidad de días de atraso en el pago (mora actual). | Clave para la reclasificación automática (CU 7) y asignación de Tipología (CU 5). | Número (Entero) | Sí | No | No |
+| **ClasificacionRiesgo** | Nivel de riesgo crediticio o de pérdida asociado al cliente. | Apoyo a la toma de decisiones gerenciales. | Enumeración (Bajo, Medio, Alto) | Sí | No | No |
+
+#### Entidad: TIPOLOGIA\_COBRANZA (Producto)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **TIPOLOGIA\_COBRANZA** | Define la estrategia o producto de gestión de deuda, basándose en rangos de monto y mora. | **RF 1, RF 2:** Define los escenarios posibles y la lógica del negocio para la programación (parámetros). | **CU 5:** Un deudor se clasifica automáticamente en una tipología según su mora y monto. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodTipologia (PK)** | Código único que identifica el tipo de servicio (ej. 'P' para Preventivo). | Clave principal para asociar reglas y recursos a la estrategia. | Texto (ej. CHAR 5) | Sí | Sí | No |
+| **Descripcion** | Nombre descriptivo del producto de cobranza. | Visualización en interfaces gerenciales. | Texto | Sí | No | No |
+| **MontoMin** | Monto mínimo de deuda para aplicar esta tipología. | Definición de rango (parámetro). | Dinero | Sí | No | No |
+| **MoraMax** | Mora máxima (en días) que puede tener un deudor para permanecer en esta tipología. | Disparador para el cambio de estado (CU 7). | Número (Entero) | Sí | No | No |
+
+#### Entidad: RECURSO (Parque Operativo)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **RECURSO** | Entidad que representa la capacidad física y humana disponible para ejecutar las tareas. | **RF 3:** Gestionar el inventario (parque) y la disponibilidad para la generación de tickets. | **CU 6:** La generación de tickets depende de la CapacidadDiaria de cada recurso. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodRecuro (PK)** | Identificador único del recurso (ej. Operador 001, Robot 005). | Programación de tareas y monitoreo de productividad. | Texto (ej. CHAR 8) | Sí | Sí | No |
+| **TipoRecurso** | Rol o naturaleza del recurso asignable. | Clasificación para las reglas de asignación (e.g., solo abogados para Judicial). | Enumeración (Operador, Abogado, Robot, Vehículo) | Sí | No | No |
+| **CapacidadDiaria** | Número máximo de tickets o tareas que el recurso puede manejar por día. | Parámetro clave para la Generación Batch de Tickets (CU 6). | Número (Entero) | Sí | No | No |
+| **HorarioDisp** | Período de tiempo en que el recurso está disponible para ser programado. | Control de asignación de tareas. | Texto (ej. HH:MM-HH:MM) | Sí | No | No |
+
+#### Entidad: GESTION (Ticket)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **GESTION** | Unidad atómica de trabajo o tarea programada (ticket). | **CU 6, RF 9:** Registrar la asignación de la tarea a un recurso y el evento histórico de la gestión (Data Entry). | **RF 9:** Un ticket debe ser único e identificable con un recurso y un deudor específicos. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **IDTicket (PK)** | Identificador único de la tarea de cobranza. | Clave principal para el seguimiento operativo y auditoría. | Texto | Sí | Sí | No |
+| **FechaHoraProgramada** | Fecha y hora en la que el recurso debe ejecutar la tarea (programación). | Control del flujo de trabajo de los operadores. | Fecha/Hora | Sí | No | No |
+| **EstadoGestion** | Estado actual de la tarea. | Monitoreo operativo (Consulta Crítica). | Enumeración (Pendiente, En Ejecución, Finalizado, Cancelado, Compromiso Pago) | Sí | No | No |
+| **Resultado** | Resultado final de la interacción con el deudor (registrado vía Data Entry). | Alimentación del archivo bitácora (Diario de Operaciones). | Texto | No | No | No |
+| **CodCliente (FK)** | Referencia al deudor a quien se dirige la gestión. | Enlace a la cuenta (Consulta Crítica). | Texto (CHAR 10) | Sí | No | No |
+| **CodRecurso (FK)** | Referencia al recurso asignado para realizar la tarea. | Enlace al operador responsable (Reporte Disputed Items/Collector). | Texto (CHAR 8) | Sí | No | No |
+
+### 4.3. Diccionario de Datos (Fichas de Tipos de Relación)
+
+#### Relación: ASIGNADO\_A
+
+| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| :--- | :--- | :--- | :--- |
+| **ASIGNADO\_A** | CLIENTE, TIPOLOGIA\_COBRANZA | Cliente (1,1); Tipología (0,N) | **CU 5:** Un cliente debe estar asignado actualmente a una y solo una tipología de cobranza (según sus reglas de monto/mora). Una tipología puede tener cero o muchos clientes asignados en un momento dado. |
+
+#### Relación: ES\_ASIGNADO
+
+| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| :--- | :--- | :--- | :--- |
+| **ES\_ASIGNADO** | RECURSO, GESTION | Recurso (1,N); Gestión (1,1) | Un ticket (gestión) debe ser asignado a uno y solo un recurso (operario, robot, abogado) para su ejecución. Un recurso puede tener asignadas muchas gestiones. |
 
 
 ---
@@ -153,3 +284,128 @@ INSERT INTO prog_cobranza.RECURSO (
     5000, 'M' -- M: Mantenimiento (No disponible para programación)
 );
 ```
+
+
+### 8.1. Búsqueda de Texto (Índices Invertidos)
+
+#### Escenario Relevante
+
+Se requiere una funcionalidad de búsqueda rápida que permita a los supervisores encontrar recursos (`RECURSO`) o tareas asignadas (`ASIGNACION_RECURSO_TICKET.TAREA_ASIGNADA`) mediante palabras clave específicas (ej., "abogado", "senior", "protocolo judicial") contenidas en campos de texto libre.
+
+#### Fundamentación
+
+Si esta consulta se realiza de manera rutinaria utilizando comandos estándar como `LIKE '%palabra%'` sobre un campo extenso (`VARCHAR`), el sistema se vería obligado a barrer (scan) toda la tabla. Dado que esta consulta podría ser muy solicitada (alta demanda) y su costo es alto (barrido completo), se clasifica como una consulta crítica. Este tipo de búsqueda consume mucho tiempo, lo que degrada la performance del sistema.
+
+La solución técnica para búsquedas de texto es el uso de Listas Invertidas (Índices Invertidos).  Esta técnica permite la búsqueda por palabras (tipo Google) y resuelve la consulta previamente, minimizando el tiempo de respuesta.
+
+#### Diseño de la Solución e Integración
+
+La solución consiste en crear un índice invertido (Full Text Search Index en PostgreSQL) sobre la columna `DESCRIPCION` en la tabla `prog_cobranza.RECURSO`. Este índice transformará el texto en tokens (palabras clave) que pueden ser consultados de forma rápida.
+
+**Sentencias SQL (Ejemplo Conceptual):**
+
+```sql
+-- DDL: Creación de la columna y el índice invertido (asumiendo PostgreSQL)
+ALTER TABLE prog_cobranza.RECURSO
+    ADD COLUMN TS_DESCRIPCION TSVECTOR;
+
+-- Actualización del índice (generalmente en Batch)
+UPDATE prog_cobranza.RECURSO
+    SET TS_DESCRIPCION = TO_TSVECTOR('spanish', DESCRIPCION);
+
+-- Creación del Índice GIN (implementación de Listas Invertidas)
+CREATE INDEX idx_recurso_descripcion_ts
+    ON prog_cobranza.RECURSO USING GIN (TS_DESCRIPCION);
+
+-- DML: Ejemplo de uso del Índice Invertido (Búsqueda por palabras)
+SELECT ID_RECURSO, DESCRIPCION
+FROM prog_cobranza.RECURSO
+WHERE TS_DESCRIPCION @@ TO_TSQUERY('spanish', 'Operador & Senior');
+```
+
+### 8.2. Manejo de Grandes Volúmenes de Datos (Particionamiento)
+
+#### Escenario Relevante
+
+La tabla `ASIGNACION_RECURSO_TICKET` (T5), que registra cada tarea específica asignada a un recurso, se proyecta con un volumen superior a 10 millones de registros en 3 años. La mayoría de las consultas operativas y gerenciales (ej. performance diaria o auditoría del último trimestre) solo acceden a los datos más recientes.
+
+#### Fundamentación
+
+El alto volumen de datos en T5 afecta directamente el rendimiento de las consultas. Para evitar que las consultas lentas "atrasen" el sistema, se debe aplicar una estrategia de Particionamiento. El particionamiento divide la data en partes más pequeñas (segmentos físicos) por rangos de clave. 
+
+#### Diseño de la Estrategia de Particionamiento
+
+Se seleccionará la columna `FECHA` (que se deriva del `ID_TICKET` asociado) como clave de particionamiento, ya que las consultas se dan generalmente por periodo de tiempo (recurrencia).
+
+* **Tabla seleccionada:** `prog_cobranza.ASIGNACION_RECURSO_TICKET` (T5).
+* **Campo de particionamiento:** `FECHA`.
+* **Criterio:** Particionamiento por Rango (mensual o trimestral), ya que el tiempo es continuo y predecible. Particionar por meses es adecuado para reportes de gestión que suelen ser mensuales.
+
+**Sentencias SQL (Ejemplo Conceptual de Particionamiento Mensual):**
+
+```sql
+-- DDL: Creación de la tabla maestra particionada (ejemplo de PostgreSQL 11+)
+CREATE TABLE prog_cobranza.ASIGNACION_RECURSO_TICKET (
+    ID_TICKET NUMERIC(15) NOT NULL,
+    ID_RECURSO NUMERIC(10) NOT NULL,
+    FECHA DATE NOT NULL,
+    -- ... otros atributos
+    PRIMARY KEY (ID_TICKET, ID_RECURSO, FECHA)
+) PARTITION BY RANGE (FECHA);
+
+-- DDL: Creación de particiones hijas (ejemplo para un mes)
+CREATE TABLE prog_cobranza.ASIGNACION_RECURSO_TICKET_202401
+    PARTITION OF prog_cobranza.ASIGNACION_RECURSO_TICKET
+    FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+
+-- DML: Ejemplo de consulta que accede solo a una partición
+SELECT *
+FROM prog_cobranza.ASIGNACION_RECURSO_TICKET
+WHERE FECHA >= '2024-03-01' AND FECHA < '2024-04-01'; 
+-- El gestor solo revisa la partición de marzo, ignorando los millones de registros anteriores.
+```
+
+### 8.3. Actualización Periódica de Datos (Procesos Batch)
+
+#### Escenario Relevante
+
+La generación de nuevos tickets (cupos) disponibles para la venta o asignación requiere evaluar masivamente la capacidad diaria de todos los recursos (T2) y la disponibilidad del calendario (T3). Asimismo, la clasificación de deudores o la liquidación de las tareas completadas deben realizarse al final del día.
+
+#### Fundamentación
+
+La Actualización de Base de Datos a grandes volúmenes (como la generación de millones de tickets disponibles) o el Recálculo de Indicadores (estadísticas, saldos) son procesos Batch.  Ejecutar estas operaciones en línea (*On-Line*) paralizaría el sistema por el alto consumo de recursos, por lo que deben ser ejecutadas de manera nocturna o periódica. Estos procesos se resuelven de manera óptima utilizando la técnica de Matching, que requiere que los archivos de entrada estén secuenciales y ordenados por clave.
+
+#### Diseño del Flujo de Ejecución (Generación de Tickets)
+
+El proceso Batch debe ser re-ejecutable y utilizar un esquema de cuadre de totales (Checkpoint) para asegurar la integridad de la información generada.
+
+**Flujo de Ejecución (Pasos):**
+
+| Paso | Módulo (Función) | Entrada | Proceso | Salida |
+| :--- | :--- | :--- | :--- | :--- |
+| P1 | ORDENA-DATOS | RECURSO (Tabla), CALENDARIO (Tabla) | Descarga y Ordenamiento secuencial de Recursos y Días operativos. | FICHERO\_RECURSO\_SEQ, FICHERO\_CALENDARIO\_SEQ (Archivos Planos). |
+| P2 | PROGRAMA (Match) | FICHERO\_RECURSO\_SEQ, FICHERO\_CALENDARIO\_SEQ | Cruza (Match) la capacidad de los recursos con los días disponibles para generar los cupos (TICKET temporal). | FICHERO\_TICKET\_NEW (Archivo Plano de Movimiento). |
+| P3 | CARGA-BD | FICHERO\_TICKET\_NEW | Carga Masiva (LOAD o COPY) de los nuevos tickets a la tabla TICKET (T4). | prog\_cobranza.TICKET (Tabla Indexada). |
+| P4 | CUADRE-CONTROL | FICHERO\_TICKET\_NEW, prog\_cobranza.TICKET | Verifica que el total de tickets generados en P2 sea igual al total de registros insertados en P3. | LOG |
+
+**Sentencias SQL (Ejemplo de Cuadre de Control)**
+
+La verificación de totales es una práctica indispensable para garantizar la confiabilidad del sistema.
+
+```sql
+-- Verificar que los totales del proceso (FICHERO_TICKET_NEW) 
+-- coincidan con la carga final en la tabla TICKET (T4).
+
+-- 1. Obtener el total de registros cargados en el proceso Batch (asumido por variable)
+SELECT COUNT(*) INTO total_cargado FROM prog_cobranza.TICKET WHERE FECHA = CURRENT_DATE;
+
+-- 2. Obtener el total de tickets que debieron generarse según la capacidad diaria total (asumido por variable)
+SELECT SUM(CAPACIDAD_DIARIA) INTO capacidad_total_esperada FROM prog_cobranza.RECURSO WHERE ESTADO = 'D';
+
+-- 3. Comparación y alerta si hay descuadre
+IF total_cargado != capacidad_total_esperada THEN
+    RAISE EXCEPTION 'ERROR DE CUADRE: La cantidad de tickets cargados (%) no coincide con la capacidad total esperada (%).', 
+        total_cargado, capacidad_total_esperada;
+END IF;
+```
+
