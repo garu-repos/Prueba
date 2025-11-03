@@ -43,3 +43,113 @@ Los atributos de calidad definen el comportamiento del sistema y son críticos p
 | **Integridad y Seguridad** | El sistema debe garantizar la integridad de los saldos y la coherencia de los datos financieros. El proceso debe evitar la ruptura de Intervalos de Control (IC) o Áreas de Control (AC) en la base de datos para mantener la performance y la estabilidad física de las tablas maestras. El acceso a la información sensible del deudor debe ser restringido y auditado. |
 | **Escalabilidad** | El módulo Batch debe estar diseñado para manejar un alto volumen de datos (varios miles o millones de deudores) sin degradar la performance. Debe soportar un crecimiento planificado en la cantidad de registros de movimiento (bitácora de gestión) que son voluminosos. |
 | **Usabilidad (Online)** | La navegación entre pantallas del operador (CU 9) debe ser sencilla, idealmente siguiendo flujos de trabajo predeterminados para presentar automáticamente la información necesaria (nombre, teléfono, deuda). |
+
+
+
+
+
+
+
+
+---
+
+## 7. Creación de Tablas y Poblamiento de Datos
+
+### 7.1. Creación de Tablas (DDL - Data Definition Language)
+
+* **Forma de Generación:** La generación de las sentencias Data Definition Language (DDL) se realiza de forma Manual, aplicando las reglas de conversión del Modelo Relacional desarrollado en la fase anterior.
+* **Lineamientos sobre los Scripts:** Para cumplir con los lineamientos de diseño físico, y asegurar que los scripts puedan reprocesarse, se incluyen sentencias de eliminación (DROP) al inicio.
+* Se crea un esquema específico (`prog_cobranza`) para el módulo, y todas las tablas se alojan dentro de este esquema, evitando el esquema `public`.
+
+**Sentencias DDL Consolidadas (Ejemplo General de Estructura):**
+
+```sql
+-- 1) Eliminar el esquema si existe (Permite volver a ejecutar) [3]
+DROP SCHEMA IF EXISTS prog_cobranza CASCADE; 
+
+-- 2) Crear esquema [2, 3]
+CREATE SCHEMA prog_cobranza;
+
+-- Elimina la tabla si existe [3]
+DROP TABLE IF EXISTS prog_cobranza.TIPO_COBRANZA CASCADE;
+
+-- 4) Crear tabla [4]
+CREATE TABLE prog_cobranza.TIPO_COBRANZA (
+    ID_TIPO_COBRANZA CHAR(4) PRIMARY KEY, -- PK
+    NOMBRE_TIPO VARCHAR(50) NOT NULL UNIQUE, -- Restricción de unicidad
+    MORA_MIN_DIAS NUMERIC(3) NOT NULL,
+    MORA_MAX_DIAS NUMERIC(3) NOT NULL,
+    MONTO_MIN DECIMAL(14, 2) NOT NULL,
+    MONTO_MAX DECIMAL(14, 2),
+    REQUIERE_GARANTIA CHAR(1) NOT NULL CHECK (REQUIERE_GARANTIA IN ('S', 'N')), -- Restricción de dominio
+    PROTOCOLO_ID CHAR(10) NOT NULL
+);
+
+-- Elimina la tabla si existe [3]
+DROP TABLE IF EXISTS prog_cobranza.TICKET;
+
+CREATE TABLE prog_cobranza.TICKET (
+    ID_TICKET BIGSERIAL PRIMARY KEY, -- PK, usa BIGSERIAL para autoincremento en PostgreSQL
+    ID_TIPO_COBRANZA CHAR(4) NOT NULL,
+    FECHA DATE NOT NULL,
+    HORA_INICIO TIME NOT NULL,
+    HORA_FIN TIME NOT NULL,
+    ESTADO_TICKET CHAR(1) NOT NULL CHECK (ESTADO_TICKET IN ('D', 'R', 'U')), -- D: Disponible, R: Reservado, U: Usado
+    
+    -- Claves Foráneas [4]
+    CONSTRAINT fk_tipo_cobranza FOREIGN KEY (ID_TIPO_COBRANZA)
+        REFERENCES prog_cobranza.TIPO_COBRANZA (ID_TIPO_COBRANZA),
+    
+    CONSTRAINT fk_fecha_calendario FOREIGN KEY (FECHA)
+        REFERENCES prog_cobranza.CALENDARIO (FECHA)
+);
+```
+
+---
+### 7.2. Poblamiento Inicial de Datos (DML - Data Manipulation Language)
+
+* **Datos Utilizados:** Se utilizarán datos sintéticos que reflejen la realidad del negocio, asegurando que los catálogos y las referencias (como tipos de cobranza y recursos) contengan información con coherencia.
+* **Orden de Ejecución:** Es crucial asegurar el orden de ejecución de las sentencias `INSERT` para respetar la integridad referencial. Las tablas maestras y de referencia (TIPO\_COBRANZA, RECURSO, CALENDARIO) deben poblarse antes que las tablas transaccionales que las referencian (TICKET, ASIGNACION\_RECURSO\_TICKET).
+
+A continuación, se presentan ejemplos de sentencias `INSERT` para TIPO\_COBRANZA y RECURSO.
+
+#### Ejemplo 1: Poblamiento de TIPO\_COBRANZA
+
+Insertamos dos tipos de cobranza que definen los escenarios del negocio.
+
+```sql
+-- Cobranza Preventiva (Menor mora, menor monto)
+INSERT INTO prog_cobranza.TIPO_COBRANZA (
+    ID_TIPO_COBRANZA, NOMBRE_TIPO, MORA_MIN_DIAS, MORA_MAX_DIAS, 
+    MONTO_MIN, MONTO_MAX, REQUIERE_GARANTIA, PROTOCOLO_ID
+) VALUES (
+    'P001', 'Preventiva Telefónica', 1, 30, 50.00, 1000.00, 'N', 'PROT_P01'
+);
+
+-- Cobranza Judicial (Mayor mora, mayor monto, requiere garantía)
+INSERT INTO prog_cobranza.TIPO_COBRANZA (
+    ID_TIPO_COBRANZA, NOMBRE_TIPO, MORA_MIN_DIAS, MORA_MAX_DIAS, 
+    MONTO_MIN, MONTO_MAX, REQUIERE_GARANTIA, PROTOCOLO_ID
+) VALUES (
+    'J001', 'Judicial Litigio', 91, 365, 5000.00, 9999999.99, 'S', 'PROT_J01'
+);
+
+
+-- Recurso Humano (Operador de Call Center)
+INSERT INTO prog_cobranza.RECURSO (
+    ID_RECURSO, CODIGO_RECURSO, TIPO_RECURSO, DESCRIPCION, 
+    CAPACIDAD_DIARIA, ESTADO
+) VALUES (
+    1001, 'OPCC_45', 'H', 'Operador Senior Call Center Turno Tarde', 
+    60, 'D' -- D: Disponible
+);
+
+-- Recurso Tecnológico (Robot para envío masivo de correos)
+INSERT INTO prog_cobranza.RECURSO (
+    ID_RECURSO, CODIGO_RECURSO, TIPO_RECURSO, DESCRIPCION, 
+    CAPACIDAD_DIARIA, ESTADO
+) VALUES (
+    5001, 'ROB_EMAIL_1', 'T', 'Robot Automatizado Envío Emails', 
+    5000, 'M' -- M: Mantenimiento (No disponible para programación)
+);
+```
