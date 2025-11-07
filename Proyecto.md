@@ -148,7 +148,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 
 
 
-
+<!---
 
 ---
 ## CU 6: Generación Masiva de Tickets de Gestión
@@ -185,5 +185,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 | **Flujos alternativos** | N/A |
 | **Postcondiciones** | El usuario obtiene una vista inmediata (tiempo de respuesta mínimo) de las tareas asignadas o la capacidad planificada. |
 | **Excepciones** | **E1: Baja Performance:** Si la consulta tarda más de lo aceptable (ej. > 2 segundos), puede indicar un problema de diseño, ya que es una operación crítica en línea. |
+-->
+
 
 
