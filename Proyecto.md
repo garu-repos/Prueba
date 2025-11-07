@@ -187,5 +187,80 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 | **Excepciones** | **E1: Baja Performance:** Si la consulta tarda más de lo aceptable (ej. > 2 segundos), puede indicar un problema de diseño, ya que es una operación crítica en línea. |
 -->
 
+---
+# 4.2. Diseño Conceptual
+
+### 4.2. Diccionario de Datos (Fichas de Tipos de Entidad)
+
+#### Entidad: CLIENTE (Deudor)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **CLIENTE** | Representa al deudor cuya cuenta está siendo gestionada por el módulo de cobranza. | Centralizar la información financiera y demográfica relevante para la gestión de la deuda. | Debe contar con un código único (Cuenta o Código de Cliente). |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodCliente (PK)** | Código único del cliente en el sistema. | Clave principal y enlace a todas las gestiones y movimientos. | Texto | Sí | Sí | No |
+| **NroDocumento** | Número de identificación | Validación de identidad y búsqueda (Consulta Crítica). | Texto | Sí | Sí | No |
+| **MontoPendiente** | Saldo total actual que el cliente adeuda. | Determinar la tipología de cobranza aplicable y el riesgo. | Dinero | Sí | No | No |
+| **DiasMora** | Cantidad de días de atraso en el pago (mora actual). | Clave para la reclasificación automática y asignación de Tipología. | Número | Sí | No | No |
+| **ClasificacionRiesgo** | Nivel de riesgo crediticio o de pérdida asociado al cliente. | Apoyo a la toma de decisiones gerenciales. | Enumeración (Bajo, Medio, Alto) | Sí | No | No |
+
+#### Entidad: TIPOLOGIA\_COBRANZA (Producto)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **TIPOLOGIA\_COBRANZA** | Define la estrategia o producto de gestión de deuda, basándose en rangos de monto y mora. | Define los escenarios posibles y la lógica del negocio para la programación (parámetros). | Un deudor se clasifica automáticamente en una tipología según su mora y monto. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodTipologia (PK)** | Código único que identifica el tipo de servicio. | Clave principal para asociar reglas y recursos a la estrategia. | Texto | Sí | Sí | No |
+| **Descripcion** | Nombre descriptivo del producto de cobranza. | Visualización en interfaces gerenciales. | Texto | Sí | No | No |
+| **MontoMin** | Monto mínimo de deuda para aplicar esta tipología. | Definición de rango (parámetro). | Dinero | Sí | No | No |
+| **MoraMax** | Mora máxima (en días) que puede tener un deudor para permanecer en esta tipología. | Disparador para el cambio de estado. | Número (Entero) | Sí | No | No |
+
+#### Entidad: RECURSO (Parque Operativo)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **RECURSO** | Entidad que representa la capacidad física y humana disponible para ejecutar las tareas. | Gestionar el inventario y la disponibilidad para la generación de tickets. | La generación de tickets depende de la CapacidadDiaria de cada recurso. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CodRecuro (PK)** | Identificador único del recurso. | Programación de tareas y monitoreo de productividad. | Texto | Sí | Sí | No |
+| **TipoRecurso** | Rol o naturaleza del recurso asignable. | Clasificación para las reglas de asignación. | Enumeración (Operador, Abogado, Robot, Vehículo) | Sí | No | No |
+| **CapacidadDiaria** | Número máximo de tickets o tareas que el recurso puede manejar por día. | Parámetro clave para la Generación Batch de Tickets. | Número | Sí | No | No |
+| **HorarioDisp** | Período de tiempo en que el recurso está disponible para ser programado. | Control de asignación de tareas. | Texto (HH:MM-HH:MM) | Sí | No | No |
+
+#### Entidad: GESTION (Ticket)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **GESTION** | Unidad atómica de trabajo o tarea programada (ticket). | Registrar la asignación de la tarea a un recurso y el evento histórico de la gestión (Data Entry). | Un ticket debe ser único e identificable con un recurso y un deudor específicos. |
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **IDTicket (PK)** | Identificador único de la tarea de cobranza. | Clave principal para el seguimiento operativo y auditoría. | Texto | Sí | Sí | No |
+| **FechaHoraProgramada** | Fecha y hora en la que el recurso debe ejecutar la tarea (programación). | Control del flujo de trabajo de los operadores. | Fecha/Hora | Sí | No | No |
+| **EstadoGestion** | Estado actual de la tarea. | Monitoreo operativo (Consulta Crítica). | Enumeración (Pendiente, En Ejecución, Finalizado, Cancelado, Compromiso Pago) | Sí | No | No |
+| **Resultado** | Resultado final de la interacción con el deudor (registrado vía Data Entry). | Alimentación del archivo bitácora (Diario de Operaciones). | Texto | No | No | No |
+| **CodCliente (FK)** | Referencia al deudor a quien se dirige la gestión. | Enlace a la cuenta (Consulta Crítica). | Texto | Sí | No | No |
+| **CodRecurso (FK)** | Referencia al recurso asignado para realizar la tarea. | Enlace al operador responsable (Reporte Disputed Items/Collector). | Texto | Sí | No | No |
+
+### 4.3. Diccionario de Datos (Fichas de Tipos de Relación)
+
+#### Relación: ASIGNADO\_A
+
+| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| :--- | :--- | :--- | :--- |
+| **ASIGNADO\_A** | CLIENTE, TIPOLOGIA\_COBRANZA | Cliente (1,1); Tipología (0,N) | Un cliente debe estar asignado actualmente a una y solo una tipología de cobranza (según sus reglas de monto/mora). Una tipología puede tener cero o muchos clientes asignados en un momento dado. |
+
+#### Relación: ES\_ASIGNADO
+
+| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| :--- | :--- | :--- | :--- |
+| **ES\_ASIGNADO** | RECURSO, GESTION | Recurso (1,N); Gestión (1,1) | Un ticket (gestión) debe ser asignado a uno y solo un recurso para su ejecución. Un recurso puede tener asignadas muchas gestiones. |
+
+
 
 
