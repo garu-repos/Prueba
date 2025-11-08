@@ -10,7 +10,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 |------------------------|-------------------------------------------|
 |RF201                   |Validación de la cartera de cliente        |
 |RF202                   |Clasificación de los deudores              |
-|RF203                   |Asignación Manual de Recurso Humano Experto a Deudor Crítico                  |  
+|RF203                   |Asignación Manual de Recurso Humano|  
 |RF204                   |Cambio de estado por vencimiento           | 
 |RF205                   |Consultar la programación                  |
 |RF206                   |Consultar el historial de los clientes     |
@@ -43,7 +43,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 | **Excepciones** | **E1: Sin Clasificación Correspondiente:** Si un deudor no cumple con ningún rango definido en los parámetros, el sistema debe asignarle una tipología por defecto o registrarlo como excepción. |
 
 
-## **Caso de uso #3: Asignación Manual de Recurso Humano Experto a Deudor Crítico**
+## **Caso de uso #3: Asignación Manual de Recurso Humano Experto**
 | Item | Detalle |
 | :--- | :--- |
 | **Actor(es) Involucrado(s)** | Gerente (Actor Principal), Sistema, Recurso Humano. |
