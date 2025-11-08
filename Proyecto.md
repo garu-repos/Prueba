@@ -13,8 +13,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 |RF203                   |Asignación de recursos                     |  
 |RF204                   |Cambio de estado por vencimiento           | 
 |RF205                   |Consultar la programación                  |
-|RF206                   |Registros de eventos de cobranza           |
-|RF207                   |Consultar el historial de los clientes     |
+|RF206                   |Consultar el historial de los clientes     |
 
 ---
 
@@ -96,22 +95,8 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 ![](Prototipo/P020400.png)
 
 
-## **Caso de uso #6: Registro de eventos de cobranza**
-| Item | Descripción |
-| :--- | :--- |
-| **Actor(es) involucrado(s)** | Operador. |
-| **Objetivo** | Registrar la interacción con el deudor (llamada, email, visita, etc.), incluyendo el resultado, el compromiso de pago y comentarios en pantalla. |
-| **Precondiciones**             |1. El sistema debe estar operando en modalidad On-Line para la captura transaccional de datos.<br> 2. El Operador debe haber seleccionado o estar gestionando un Ticket o tarea asignada, lo cual requiere que el ticket ya exista.<br> 3. El sistema debe garantizar que la operación será segura ante cualquier falla para evitar la pérdida o corrupción de datos. |
-| **Disparador o evento inicial** | El operador finaliza una gestión asignada por un ticket y necesita registrar la evidencia. |
-| **Flujo principal de eventos** | 1. El operador selecciona el ticket gestionado (Casos de uso 5).<br>2. Ingresa los datos de la interacción (ejemplo, "Deudor se compromete a pagar el día X").<br>3. El sistema registra el evento como un Movimiento.<br>4. El sistema actualiza la cuenta maestra del deudor.<br>5. El ticket se marca como cerrado o gestionado. |
-| **Flujos alternativos** | **A1: Registro de Compromiso de Pago:** Si el deudor se compromete a pagar, el sistema registra la fecha y monto esperado, lo cual se convierte en un evento futuro de monitoreo. |
-| **Postcondiciones** | El evento de cobranza queda registrado, y los saldos/estados de la cuenta del deudor se actualizan en tiempo real (Transaccional). |
-| **Excepciones** | **E1: Error de Grabación:** En un proceso transaccional, debe asegurarse la seguridad ante cualquier falla y garantizar la reversa de operaciones (Rollback) si ocurre un error. |
 
-
-
-
-## **Caso de uso #7: Consultar el historial de los clientes**
+## **Caso de uso #6: Consultar el historial de los clientes**
 | Item | Descripción |
 | :--- | :--- |
 | **Actor(es) involucrado(s)** | Gerentes de cuenta y Operadores. |
