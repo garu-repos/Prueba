@@ -10,7 +10,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 |------------------------|-------------------------------------------|
 |RF201                   |Validación de la cartera de cliente        |
 |RF202                   |Clasificación de los deudores              |
-|RF203                   |Asignación de recursos                     |  
+|RF203                   |Asignación Manual de Recurso Humano Experto a Deudor Crítico                  |  
 |RF204                   |Cambio de estado por vencimiento           | 
 |RF205                   |Consultar la programación                  |
 |RF206                   |Consultar el historial de los clientes     |
@@ -43,15 +43,18 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 | **Excepciones** | **E1: Sin Clasificación Correspondiente:** Si un deudor no cumple con ningún rango definido en los parámetros, el sistema debe asignarle una tipología por defecto o registrarlo como excepción. |
 
 
-## **Caso de uso #3: Asignación de recursos**
-| **ID**                         | RF203                                                                      |
-|--------------------------------|----------------------------------------------------------------------------|
-| **Actor(es)**                  |Jefe y supervisor de cobranza                                               |
-| **Objetivo**                   |Asignar a un asesor de cobranza una cobranza programada.                    |
-| **Precondiciones**             |Existe una cobranza programada.                                             |
-| **Flujo Principal**            |1. El usuario selecciona una cobranza programada.<br>2. El sistema muestra la información de la cobranza.<br>3. El usuario selecciona el responsable de una lista de asesores de cobranza registrados.<br>4. El sistema guarda la asignación.|
-| **Postcondiciones**            |Se genera el ticket de cobranza con un asesor encargado.                    |
-| **Excepciones**                |Error en la asignación o fallo de conexión.                                 |
+## **Caso de uso #3: Asignación Manual de Recurso Humano Experto a Deudor Crítico**
+| Item | Detalle |
+| :--- | :--- |
+| **Actor(es) Involucrado(s)** | Gerente (Actor Principal), Sistema, Recurso Humano. |
+| **Objetivo** | Asegurar que un deudor clasificado como crítico o importante para la empresa reciba gestión inmediata y personalizada por parte de un Recurso Humano Experto, comprometiendo la disponibilidad de dicho recurso mediante la asignación de un Ticket. |
+| **Precondiciones** | 1. El deudor debe estar previamente registrado en la cartera.<br>2. El recurso humano debe estar registrado en el catálogo de `RECURSO` e identificado con un Puesto/Calificación que lo designe como "Experto".<br>3. El sistema debe haber generado previamente Tickets (cupos) que reflejen la capacidad futura del recurso experto. |
+| **Disparador o Evento Inicial** | El Gerente accede al módulo de Consulta Gerencial y selecciona la opción de "Asignación de Recurso Dedicado" tras identificar un deudor crítico. |
+| **Flujo Principal de Eventos** | 1. **Identificación del Deudor:** El Gerente (Actor) ingresa el código del Deudor Crítico.<br>2. **Consulta Crítica (Online):** El Sistema valida la existencia y presenta la información de la Consulta Crítica del deudor.<br>3. **Solicitud de Recurso Experto:** El Gerente selecciona el perfil de Recurso Experto requerido.<br>4. **Consulta de Disponibilidad:** El Sistema consulta `RECURSO` y muestra la disponibilidad.<br>5. **Registro de Asignación:** El Sistema registra la asignación.<br>6. **Actualización del Ticket:** El Sistema actualiza el estado del `TICKET` de "Disponible" a "Asignado".<br>7. **Notificación:** El Sistema notifica al Recurso Humano asignado en su lista de trabajo (Work List).|
+| **Flujos Alternativos** | **A1. Deudor con Gestión en Curso:** Si el deudor ya tiene un ticket asignado, el Sistema pregunta al Gerente si desea reasignar. Si acepta, se cancela el ticket actual y se crea la nueva asignación.<br>**A2. Falta de Capacidad:** Si no hay tickets disponibles, el Sistema presenta automáticamente el calendario de fechas futuras con capacidad libre. |
+| **Postcondiciones** | 1. Se registra la relación `ES_ASIGNADO` del recurso humano con el ticket de gestión.<br>2. La capacidad de trabajo del recurso humano queda comprometida para la fecha y hora del ticket seleccionado. |
+| **Excepciones** | **E1. Recurso en Mantenimiento:** Si el recurso está en "Mantenimiento" o "No Disponible", el Sistema rechaza la operación (revisar `RECURSO` - `T2`).<br>**E2. Error de Integridad:** Si el `CLIENTE.MontoPendiente` es cero, el Sistema rechaza la asignación indicando que la deuda ha sido liquidada. |
+
 
 ## Prototipo inicial
 ![](Prototipo/P020200.png)
@@ -78,7 +81,7 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 | **Flujo principal de eventos** | 1. El sistema monitorea los tickets o gestiones activas y compara la fecha de inicio con la Duración Máxima de la Campaña.<br>2. Si se excede el plazo, el sistema cambia automáticamente el estado del deudor.<br>3. Este cambio desencadena la generación de nuevos tickets para el nuevo protocolo. |
 | **Flujos alternativos** | N/A |
 | **Postcondiciones** | El deudor ha sido promovido a una nueva tipología de cobranza, y el sistema ha generado las tareas (tickets) correspondientes a su nueva fase de gestión. |
-| **Excepciones** | **E1: Plazo no Vencido:** Si el tiempo de gestión aún está dentro del límite (CU 2), el sistema ignora el deudor y continúa el barrido. |
+| **Excepciones** | **E1: Plazo no Vencido:** Si el tiempo de gestión aún está dentro del límite, el sistema ignora el deudor y continúa el barrido. |
 
 
 ## **Caso de uso #5: Consultar la programación**
