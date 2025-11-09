@@ -625,40 +625,65 @@ A continuación, se presentan ejemplos de sentencias `INSERT` para TIPO\_COBRANZ
 Insertamos dos tipos de cobranza que definen los escenarios del negocio.
 
 ```sql
--- Cobranza Preventiva (Menor mora, menor monto)
-INSERT INTO prog_cobranza.TIPO_COBRANZA (
-    ID_TIPO_COBRANZA, NOMBRE_TIPO, MORA_MIN_DIAS, MORA_MAX_DIAS, 
-    MONTO_MIN, MONTO_MAX, REQUIERE_GARANTIA, PROTOCOLO_ID
-) VALUES (
-    'P001', 'Preventiva Telefónica', 1, 30, 50.00, 1000.00, 'N', 'PROT_P01'
-);
+-- ********************************************************************************
+-- 1. POBLAMIENTO DE TABLAS DE CATÁLOGO Y REFERENCIA (Nivel 1)
+-- ********************************************************************************
 
--- Cobranza Judicial (Mayor mora, mayor monto, requiere garantía)
-INSERT INTO prog_cobranza.TIPO_COBRANZA (
-    ID_TIPO_COBRANZA, NOMBRE_TIPO, MORA_MIN_DIAS, MORA_MAX_DIAS, 
-    MONTO_MIN, MONTO_MAX, REQUIERE_GARANTIA, PROTOCOLO_ID
-) VALUES (
-    'J001', 'Judicial Litigio', 91, 365, 5000.00, 9999999.99, 'S', 'PROT_J01'
-);
+-- T3: CALENDARIO (Fechas operativas)
+-- Se insertan fechas clave, incluyendo días hábiles y un fin de semana.
+INSERT INTO prog_cobranza.CALENDARIO (FECHA, DIA_SEMANA, ES_FERIADO, TURNO_OPERATIVO) VALUES
+('2025-03-10', 'L', 'N', 'M'), -- Lunes, Mañana (M)
+('2025-03-11', 'M', 'N', 'M'), -- Martes, Mañana (M)
+('2025-03-12', 'X', 'N', 'T'), -- Miércoles, Tarde (T)
+('2025-03-15', 'S', 'S', 'N'), -- Sábado, Feriado (S), Noche (N)
+('2025-03-16', 'D', 'S', 'N'); -- Domingo, Feriado (S), Noche (N)
 
 
--- Recurso Humano (Operador de Call Center)
-INSERT INTO prog_cobranza.RECURSO (
-    ID_RECURSO, CODIGO_RECURSO, TIPO_RECURSO, DESCRIPCION, 
-    CAPACIDAD_DIARIA, ESTADO
-) VALUES (
-    1001, 'OPCC_45', 'H', 'Operador Senior Call Center Turno Tarde', 
-    60, 'D' -- D: Disponible
-);
+-- T1: TIPO_COBRANZA (Reglas de clasificación)
+-- Se definen las reglas paramétricas (mora, monto, garantía) que rigen la clasificación.
+INSERT INTO prog_cobranza.TIPO_COBRANZA (ID_TIPO_COBRANZA, NOMBRE_TIPO, MORA_MIN_DIAS, MORA_MAX_DIAS, MONTO_MIN, MONTO_MAX, REQUIERE_GARANTIA, PROTOCOLO_ID) VALUES
+('P01', 'Preventiva Temprana', 1, 30, 100.00, 5000.00, 'N', 'PROTO01'),
+('P02', 'Prejudicial Estándar', 31, 90, 5000.01, 25000.00, 'N', 'PROTO02'),
+('J01', 'Judicial Alto Riesgo', 91, 999, 25000.01, NULL, 'S', 'PROTO03');
 
--- Recurso Tecnológico (Robot para envío masivo de correos)
-INSERT INTO prog_cobranza.RECURSO (
-    ID_RECURSO, CODIGO_RECURSO, TIPO_RECURSO, DESCRIPCION, 
-    CAPACIDAD_DIARIA, ESTADO
-) VALUES (
-    5001, 'ROB_EMAIL_1', 'T', 'Robot Automatizado Envío Emails', 
-    5000, 'M' -- M: Mantenimiento (No disponible para programación)
-);
+
+-- T2: RECURSO (Inventario de recursos disponibles)
+-- Se definen 3 recursos: un operador estándar, un abogado experto (para CU G-01) y un autómata.
+INSERT INTO prog_cobranza.RECURSO (CODIGO_RECURSO, TIPO_RECURSO, DESCRIPCION, CAPACIDAD_DIARIA, ESTADO) VALUES
+('OPR001', 'H', 'Operador Senior - Gestión Telefónica', 60, 'D'), -- ID_RECURSO = 1
+('ABG001', 'H', 'Abogado Experto - Judicial/Crítico', 10, 'D'),   -- ID_RECURSO = 2
+('ROB005', 'T', 'Robot de Envío de Emails Masivos', 5000, 'D'); -- ID_RECURSO = 3
+
+
+-- ********************************************************************************
+-- 2. POBLAMIENTO DE TABLAS TRANSACCIONALES (Nivel 2)
+-- ********************************************************************************
+
+-- T4: TICKET (Generación de cupos de gestión)
+-- Los tickets se generan en lote para los tipos de cobranza definidos, vinculados a fechas y horarios (CALENDARIO).
+INSERT INTO prog_cobranza.TICKET (ID_TIPO_COBRANZA, FECHA, HORA_INICIO, HORA_FIN, ESTADO_TICKET) VALUES
+('P01', '2025-03-10', '09:00:00', '10:00:00', 'D'), -- ID_TICKET = 1 (Disponible)
+('P01', '2025-03-10', '10:00:00', '11:00:00', 'R'), -- ID_TICKET = 2 (Reservado, para Operador 1)
+('P02', '2025-03-11', '08:00:00', '09:00:00', 'D'), -- ID_TICKET = 3 (Disponible)
+('J01', '2025-03-15', '14:00:00', '16:00:00', 'D'); -- ID_TICKET = 4 (Feriado, Judicial)
+
+
+-- T5: ASIGNACION_RECURSO_TICKET (Asignación de tareas a recursos)
+-- Esta tabla resuelve la carga de trabajo, documentando qué recurso ejecuta qué ticket.
+
+-- 1. Asignación del Ticket 2 (Reservado) al Operador Senior (ID_RECURSO = 1)
+INSERT INTO prog_cobranza.ASIGNACION_RECURSO_TICKET (ID_TICKET, ID_RECURSO, TAREA_ASIGNADA, ESTADO_TAREA) VALUES
+(2, 1, 'Llamada preventiva de primer contacto a Deudor X', 'P'); -- P: Pendiente
+
+-- 2. Simulación de Asignación Manual Crítica (CU G-01)
+-- El Abogado Experto (ID_RECURSO = 2) es asignado al Ticket 3 (Prejudicial, disponible).
+-- En un escenario real, el sistema actualizaría TICKET 3 a 'R' (Reservado) después de esta asignación.
+INSERT INTO prog_cobranza.ASIGNACION_RECURSO_TICKET (ID_TICKET, ID_RECURSO, TAREA_ASIGNADA, ESTADO_TAREA) VALUES
+(3, 2, 'Revisión y emisión de carta notarial crítica a Deudor Z', 'P');
+
+-- 3. Asignación del Ticket 4 (Judicial) al Robot (ID_RECURSO = 3)
+INSERT INTO prog_cobranza.ASIGNACION_RECURSO_TICKET (ID_TICKET, ID_RECURSO, TAREA_ASIGNADA, ESTADO_TAREA) VALUES
+(4, 3, 'Envío de email de notificación judicial automatizado', 'P');
 ```
 
 
