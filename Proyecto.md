@@ -513,47 +513,102 @@ La planificación de la capacidad física asegura que el sistema esté preparado
 * **Lineamientos sobre los Scripts:** Para cumplir con los lineamientos de diseño físico, y asegurar que los scripts puedan reprocesarse, se incluyen sentencias de eliminación (DROP) al inicio.
 * Se crea un esquema específico (`prog_cobranza`) para el módulo, y todas las tablas se alojan dentro de este esquema, evitando el esquema `public`.
 
-**Sentencias DDL Consolidadas (Ejemplo General de Estructura):**
+**Sentencias DDL Consolidadas:**
 
 ```sql
--- 1) Eliminar el esquema si existe (Permite volver a ejecutar) [3]
-DROP SCHEMA IF EXISTS prog_cobranza CASCADE; 
+-- ********************************************************************************
+-- 1. ELIMINACIÓN Y CREACIÓN DEL ESQUEMA (PERMITE REPROCESAR)
+-- ********************************************************************************
 
--- 2) Crear esquema [2, 3]
+-- Elimina el esquema 'prog_cobranza' si existe, incluyendo todas sus tablas (CASCADE).
+DROP SCHEMA IF EXISTS prog_cobranza CASCADE;
+
+-- Crea el esquema específico para el módulo de Programación de Cobranza.
 CREATE SCHEMA prog_cobranza;
 
--- Elimina la tabla si existe [3]
-DROP TABLE IF EXISTS prog_cobranza.TIPO_COBRANZA CASCADE;
 
--- 4) Crear tabla [4]
-CREATE TABLE prog_cobranza.TIPO_COBRANZA (
-    ID_TIPO_COBRANZA CHAR(4) PRIMARY KEY, -- PK
-    NOMBRE_TIPO VARCHAR(50) NOT NULL UNIQUE, -- Restricción de unicidad
-    MORA_MIN_DIAS NUMERIC(3) NOT NULL,
-    MORA_MAX_DIAS NUMERIC(3) NOT NULL,
-    MONTO_MIN DECIMAL(14, 2) NOT NULL,
-    MONTO_MAX DECIMAL(14, 2),
-    REQUIERE_GARANTIA CHAR(1) NOT NULL CHECK (REQUIERE_GARANTIA IN ('S', 'N')), -- Restricción de dominio
-    PROTOCOLO_ID CHAR(10) NOT NULL
+-- ********************************************************************************
+-- 2. CREACIÓN DE TABLAS DE REFERENCIA Y CATÁLOGO (T3, T2, T1)
+-- ********************************************************************************
+
+-- T3: CALENDARIO (Tabla de Referencia Temporal)
+-- Esencial para programar tickets por fecha y turno.
+CREATE TABLE prog_cobranza.CALENDARIO (
+    FECHA           DATE PRIMARY KEY,    -- PK: Día específico
+    DIA_SEMANA      CHAR(1) NOT NULL,
+    ES_FERIADO      CHAR(1) NOT NULL,
+    TURNO_OPERATIVO CHAR(1) NOT NULL,
+    CONSTRAINT chk_feriado CHECK (ES_FERIADO IN ('S', 'N'))
 );
 
--- Elimina la tabla si existe [3]
-DROP TABLE IF EXISTS prog_cobranza.TICKET;
+-- T2: RECURSO (Catálogo de Recursos Operativos)
+-- Almacena la capacidad de los operadores, abogados o robots.
+CREATE TABLE prog_cobranza.RECURSO (
+    ID_RECURSO        BIGSERIAL PRIMARY KEY, -- PK: ID Único del recurso (Uso de BIGSERIAL para asegurar unicidad y secuencia en alto volumen)
+    CODIGO_RECURSO    VARCHAR(20) UNIQUE NOT NULL, -- Identificación alfanumérica
+    TIPO_RECURSO      CHAR(2) NOT NULL,            -- Humano ('H'), Tecnológico ('T'), etc. 
+    DESCRIPCION       VARCHAR(100) NOT NULL,       -- Detalle del recurso
+    CAPACIDAD_DIARIA  NUMERIC(4) NOT NULL,         -- Límite de tareas por día (INTEGER/NUMERIC)
+    ESTADO            CHAR(1) NOT NULL,            -- Disponible ('D'), Mantenimiento ('M')
+    CONSTRAINT chk_estado_recurso CHECK (ESTADO IN ('D', 'M', 'O')) -- O = Ocupado
+);
 
+-- T1: TIPO_COBRANZA (Gobernanza/Reglas de Clasificación)
+-- Define los productos de cobranza basados en parámetros.
+CREATE TABLE prog_cobranza.TIPO_COBRANZA (
+    ID_TIPO_COBRANZA    CHAR(4) PRIMARY KEY,     -- PK: Identificador del tipo (Ej. 'P01', 'J01')
+    NOMBRE_TIPO         VARCHAR(50) UNIQUE NOT NULL,
+    MORA_MIN_DIAS       NUMERIC(3) NOT NULL,     -- NUMERIC(3)
+    MORA_MAX_DIAS       NUMERIC(3) NOT NULL,     -- NUMERIC(3)
+    MONTO_MIN           DECIMAL(14, 2) NOT NULL, -- DECIMAL (Monetario)
+    MONTO_MAX           DECIMAL(14, 2),          -- DECIMAL (Monetario)
+    REQUIERE_GARANTIA   CHAR(1) NOT NULL,        -- 'S' o 'N' (CHECK)
+    PROTOCOLO_ID        CHAR(10) NOT NULL,       -- Enlace a protocolo de acciones
+    CONSTRAINT chk_garantia CHECK (REQUIERE_GARANTIA IN ('S', 'N')),
+    CONSTRAINT chk_mora_min CHECK (MORA_MIN_DIAS > 0)
+);
+
+-- ********************************************************************************
+-- 3. CREACIÓN DE TABLAS TRANSACCIONALES (T4, T5)
+-- ********************************************************************************
+
+-- T4: TICKET (Movimiento / Unidad de Cupo de Gestión)
+-- Se genera de forma masiva (Batch) y representa la capacidad disponible.
 CREATE TABLE prog_cobranza.TICKET (
-    ID_TICKET BIGSERIAL PRIMARY KEY, -- PK, usa BIGSERIAL para autoincremento en PostgreSQL
-    ID_TIPO_COBRANZA CHAR(4) NOT NULL,
-    FECHA DATE NOT NULL,
-    HORA_INICIO TIME NOT NULL,
-    HORA_FIN TIME NOT NULL,
-    ESTADO_TICKET CHAR(1) NOT NULL CHECK (ESTADO_TICKET IN ('D', 'R', 'U')), -- D: Disponible, R: Reservado, U: Usado
+    ID_TICKET           BIGSERIAL PRIMARY KEY, -- PK: Numérico secuencial (BIGSERIAL para alto volumen)
+    ID_TIPO_COBRANZA    CHAR(4) NOT NULL,      -- FK a TIPO_COBRANZA (T1)
+    FECHA               DATE NOT NULL,         -- FK a CALENDARIO (T3)
+    HORA_INICIO         TIME NOT NULL,
+    HORA_FIN            TIME NOT NULL,
+    ESTADO_TICKET       CHAR(1) NOT NULL,      -- Disponible ('D'), Reservado ('R'), Usado ('U')
     
-    -- Claves Foráneas [4]
+    -- Restricciones de Claves Foráneas (FK)
     CONSTRAINT fk_tipo_cobranza FOREIGN KEY (ID_TIPO_COBRANZA)
         REFERENCES prog_cobranza.TIPO_COBRANZA (ID_TIPO_COBRANZA),
     
     CONSTRAINT fk_fecha_calendario FOREIGN KEY (FECHA)
-        REFERENCES prog_cobranza.CALENDARIO (FECHA)
+        REFERENCES prog_cobranza.CALENDARIO (FECHA),
+    
+    CONSTRAINT chk_estado_ticket CHECK (ESTADO_TICKET IN ('D', 'R', 'U'))
+);
+
+-- T5: ASIGNACION_RECURSO_TICKET (Tabla Asociativa N:M)
+-- Registra qué recurso (T2) se asigna a qué tarea/ticket (T4).
+CREATE TABLE prog_cobranza.ASIGNACION_RECURSO_TICKET (
+    ID_TICKET           BIGINT NOT NULL,       -- PK/FK: Del ticket asignado 
+    ID_RECURSO          BIGINT NOT NULL,       -- PK/FK: Del recurso asignado 
+    TAREA_ASIGNADA      VARCHAR(100) NOT NULL, -- Detalle del trabajo a ejecutar 
+    ESTADO_TAREA        CHAR(1) NOT NULL,      -- Pendiente ('P'), Finalizada ('F'), etc. 
+
+    -- Clave Primaria Compuesta (PK)
+    PRIMARY KEY (ID_TICKET, ID_RECURSO),
+    
+    -- Restricciones de Claves Foráneas (FK)
+    CONSTRAINT fk_asignacion_ticket FOREIGN KEY (ID_TICKET)
+        REFERENCES prog_cobranza.TICKET (ID_TICKET),
+    
+    CONSTRAINT fk_asignacion_recurso FOREIGN KEY (ID_RECURSO)
+        REFERENCES prog_cobranza.RECURSO (ID_RECURSO)
 );
 ```
 
