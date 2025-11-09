@@ -178,77 +178,135 @@ Para que este módulo funcione correctamente se debe de cumplir los siguientes r
 ---
 # 4.2. Diseño Conceptual
 
-### 4.2. Diccionario de Datos (Fichas de Tipos de Entidad)
-
 #### Entidad: CLIENTE (Deudor)
 
 | Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
 | **CLIENTE** | Representa al deudor cuya cuenta está siendo gestionada por el módulo de cobranza. | Centralizar la información financiera y demográfica relevante para la gestión de la deuda. | Debe contar con un código único (Cuenta o Código de Cliente). |
 
+
 | Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CodCliente (PK)** | Código único del cliente en el sistema. | Clave principal y enlace a todas las gestiones y movimientos. | Texto | Sí | Sí | No |
-| **NroDocumento** | Número de identificación | Validación de identidad y búsqueda (Consulta Crítica). | Texto | Sí | Sí | No |
-| **MontoPendiente** | Saldo total actual que el cliente adeuda. | Determinar la tipología de cobranza aplicable y el riesgo. | Dinero | Sí | No | No |
-| **DiasMora** | Cantidad de días de atraso en el pago (mora actual). | Clave para la reclasificación automática y asignación de Tipología. | Número | Sí | No | No |
-| **ClasificacionRiesgo** | Nivel de riesgo crediticio o de pérdida asociado al cliente. | Apoyo a la toma de decisiones gerenciales. | Enumeración (Bajo, Medio, Alto) | Sí | No | No |
+| **Codigo_cliente (PK)** | Código único que identifica al deudor dentro del sistema. | Clave primaria (PK). Es el enlace principal a todas las gestiones y movimientos. | Texto  | Sí  | Sí | No |
+| **Tipo_documento** | Tipo de identificación oficial (RUC para Jurídica, DNI para Natural). | Parte de la clave alternativa. Necesario para validar la identidad y el estado legal del cliente. | Enumeración | Sí | No | No |
+| **Numero_documento** | Número de identificación según el tipo (RUC/DNI). | Clave alternativa. Se utiliza para la validación del deudor contra entidades externas . | Texto | Sí | Sí | No |
+| **Nombres** | Nombre de la persona natural (Primer nombre, Segundo nombre) o Razón Social (Jurídica). | Identificación precisa del deudor. Debe capturar la identidad legal correcta para efectos de cobranza y litigio. | Texto | Sí | No | No |
+| **Apellidos** | Apellidos de la persona natural (Paterno y Materno). | Información esencial de identidad. | Texto | No | No | No |
+| **Sexo** | Sexo de la persona natural. | Se usa en la definición de tipologías (categorías) de persona. |  Enumeración | No | No | No |
+| **FechaNC** | Fecha de Nacimiento (Persona Natural) o Fecha de Creación/Incorporación (Persona Jurídica). | Atributo estático utilizado para calcular la Antigüedad (edad) del deudor o su tiempo en el sistema. | Fecha | Sí | No | No |
+| **Cartera** | Clasificación actual del deudor (Temprana, Intermedia, Tardía). | Almacena la tipología de cobranza asignada automáticamente. Define la estrategia a aplicar. | Enumeración | Sí | No | No |
 
-#### Entidad: TIPOLOGIA\_COBRANZA (Producto)
+
+#### Entidad: CONTACTO
 
 | Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
-| **TIPOLOGIA\_COBRANZA** | Define la estrategia o producto de gestión de deuda, basándose en rangos de monto y mora. | Define los escenarios posibles y la lógica del negocio para la programación (parámetros). | Un deudor se clasifica automáticamente en una tipología según su mora y monto. |
+| **CONTACTO** | Mecanismo o medio a través del cual el sistema o los recursos humanos pueden establecer comunicación con el cliente/deudor. | Proporcionar múltiples vías de contacto (físicas o virtuales) para cumplir con el protocolo de cobranza. | Un cliente (PARTY) puede tener muchos contactos (CONTACT MECHANISM), y un contacto (ej. un teléfono de oficina) puede ser usado por varios clientes. |
+
+### Tabla de Atributos
 
 | Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CodTipologia (PK)** | Código único que identifica el tipo de servicio. | Clave principal para asociar reglas y recursos a la estrategia. | Texto | Sí | Sí | No |
-| **Descripcion** | Nombre descriptivo del producto de cobranza. | Visualización en interfaces gerenciales. | Texto | Sí | No | No |
-| **MontoMin** | Monto mínimo de deuda para aplicar esta tipología. | Definición de rango (parámetro). | Dinero | Sí | No | No |
-| **MoraMax** | Mora máxima (en días) que puede tener un deudor para permanecer en esta tipología. | Disparador para el cambio de estado. | Número (Entero) | Sí | No | No |
+| **Codigo_Contacto (PK)** | Identificador único del mecanismo de contacto. | Clave Principal (PK). Permite identificar de forma única la instancia del contacto (ej. la dirección específica o el número de teléfono). | Numérico Secuencial (ID Number) o Texto | **Sí** | **Sí (PK)** | No |
+| **Tipo_Contacto** | Clasificación de la naturaleza del contacto. | Permite al sistema y a los recursos filtrar el mecanismo de contacto a utilizar. | Enumeración (Teléfono, Celular, Email, Dirección) | **Sí** | No | No |
+| **Valor_contacto** | El dato concreto o la cadena de caracteres que representa el mecanismo de contacto. | Contiene el valor real que permite la comunicación (ej. el número de teléfono, la cadena del correo electrónico, la cadena de la dirección). | Texto | **Sí** | No | No |
 
-#### Entidad: RECURSO (Parque Operativo)
+#### Entidad: DEUDA (Item de Cobranza)
 
 | Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
-| **RECURSO** | Entidad que representa la capacidad física y humana disponible para ejecutar las tareas. | Gestionar el inventario y la disponibilidad para la generación de tickets. | La generación de tickets depende de la CapacidadDiaria de cada recurso. |
+| **DEUDA** | Representa el ítem individual de la obligación financiera del cliente. | Identificar, valorar y hacer seguimiento a la morosidad de una obligación específica. Esta información es la base para la Clasificación Automática de Deudores y la asignación del Tipo_Cobranza. | La deuda debe estar asociada a un CLIENTE único. La deuda debe estar en mora (generalmente DiasMora > 0) para ser gestionada por el área de cobranzas. |
+
+### Tabla de Atributos
 
 | Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CodRecuro (PK)** | Identificador único del recurso. | Programación de tareas y monitoreo de productividad. | Texto | Sí | Sí | No |
-| **TipoRecurso** | Rol o naturaleza del recurso asignable. | Clasificación para las reglas de asignación. | Enumeración (Operador, Abogado, Robot, Vehículo) | Sí | No | No |
-| **CapacidadDiaria** | Número máximo de tickets o tareas que el recurso puede manejar por día. | Parámetro clave para la Generación Batch de Tickets. | Número | Sí | No | No |
-| **HorarioDisp** | Período de tiempo en que el recurso está disponible para ser programado. | Control de asignación de tareas. | Texto (HH:MM-HH:MM) | Sí | No | No |
+| **Codigo_deuda (PK)** | Identificador único del ítem de la deuda o referencia de la factura. | Clave Principal (PK). Permite la trazabilidad y la integridad de las transacciones. | Texto | **Sí ** | **Sí (PK)** | No |
+| **Monto** | Valor total o saldo pendiente actual de esta obligación. |Se utiliza para calcular el saldo total consolidado del cliente y compararlo con los MONTO_MIN/MAX definidos en los parámetros de cobranza. | Dinero | **Sí** | No | No |
+| **DiasMora** | Cantidad de días que esta obligación está vencida (días de atraso). | Es un atributo derivado que se calcula por la diferencia entre la fecha actual y la fecha de vencimiento. Clave para la reclasificación automática y la asignación de la Cartera. | Número | **Sí ** | No | No |
 
-#### Entidad: GESTION (Ticket)
+#### Entidad: RECURSO
 
 | Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
-| **GESTION** | Unidad atómica de trabajo o tarea programada (ticket). | Registrar la asignación de la tarea a un recurso y el evento histórico de la gestión (Data Entry). | Un ticket debe ser único e identificable con un recurso y un deudor específicos. |
+| **RECURSO** | Inventario de capacidad física, tecnológica y humana disponible para ejecutar las tareas de cobranza. | Gestionar el inventario y la disponibilidad, la cual es la base para la generación de tickets y la asignación de tareas. | Los recursos son programados en base a su capacidad diaria para maximizar la eficiencia. Si el estado es "Mantenimiento", el recurso no debe ser programado. |
+
+### Tabla de Atributos
 
 | Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **IDTicket (PK)** | Identificador único de la tarea de cobranza. | Clave principal para el seguimiento operativo y auditoría. | Texto | Sí | Sí | No |
-| **FechaHoraProgramada** | Fecha y hora en la que el recurso debe ejecutar la tarea (programación). | Control del flujo de trabajo de los operadores. | Fecha/Hora | Sí | No | No |
-| **EstadoGestion** | Estado actual de la tarea. | Monitoreo operativo (Consulta Crítica). | Enumeración (Pendiente, En Ejecución, Finalizado, Cancelado, Compromiso Pago) | Sí | No | No |
-| **Resultado** | Resultado final de la interacción con el deudor (registrado vía Data Entry). | Alimentación del archivo bitácora (Diario de Operaciones). | Texto | No | No | No |
-| **CodCliente (FK)** | Referencia al deudor a quien se dirige la gestión. | Enlace a la cuenta (Consulta Crítica). | Texto | Sí | No | No |
-| **CodRecurso (FK)** | Referencia al recurso asignado para realizar la tarea. | Enlace al operador responsable (Reporte Disputed Items/Collector). | Texto | Sí | No | No |
+| **Codigo_recurso (PK)** | Identificador único del recurso. | Clave Principal (PK). Identificación rápida y monitoreo de productividad. | Texto | **Sí** | **Sí** | No |
+| **Tipo_recurso** | Clasificación de la naturaleza del recurso asignable. | Clasificación para reglas de asignación. | Enumeración (Asesor/Humano, Máquina/Tecnológico, Físico) | **Sí** | No | No |
+| **Descripcion** | Detalle del bien o persona. | Documentación y trazabilidad del recurso. | Texto | **Sí** | No | No |
+| **NivelExperiencia** | Calificación del recurso humano (Asesor). | Necesario para asignar recursos expertos a deudores críticos. | Enumeración (Junior, Senior, Experto) | No | No | No |
+| **TiempoExperiencia** | Antigüedad del recurso en el puesto o rol (en meses). | Indicador de comportamiento y apoyo en la clasificación del nivel. | Número  | No | No | No |
+| **Origen** | Indica si el recurso es propiedad de la empresa o es subcontratado. | Clasificación para Controles de Seguridad y costos. | Enumeración (Interno, Externo) | **Sí** | No | No |
+| **Disponibilidad** | Período de tiempo en el que el recurso está disponible para ser programado. | Controla la asignación de tareas dentro del horario operativo. | Hora | **Sí** | No | **Sí** |
 
-### 4.3. Diccionario de Datos (Fichas de Tipos de Relación)
+#### Entidad: TICKET (Gestión)
 
-#### Relación: ASIGNADO\_A
-
-| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
-| **ASIGNADO\_A** | CLIENTE, TIPOLOGIA\_COBRANZA | Cliente (1,1); Tipología (0,N) | Un cliente debe estar asignado actualmente a una y solo una tipología de cobranza (según sus reglas de monto/mora). Una tipología puede tener cero o muchos clientes asignados en un momento dado. |
+| **TICKET** | Unidad atómica de trabajo o cupo programado. Es la materialización de la venta o reserva de un servicio. | Gestionar la disponibilidad del servicio. Permite al sistema determinar si puede aceptar nuevos requerimientos y programar recursos. | Un ticket se genera en procesos Batch en función de la disponibilidad y capacidad de los recursos. El ticket es la promesa de atención en una fecha programada. |
 
-#### Relación: ES\_ASIGNADO
+### Tabla de Atributos
 
-| Nombre | Tipos de Entidad Participantes | Cardinalidades (min..max) | Justificación de Cardinalidades (Reglas de Negocio) |
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codigo\_ticket (PK)** | Identificador único del cupo o tarea programada. | Clave Principal (PK). Es el identificador de la instancia de la existencia del servicio. | Numérico | **Sí** | **Sí** | No |
+| **Fecha\_Programada** | La fecha en la que la gestión está programada para ser ejecutada. | Sincronismo de los recursos y control del flujo de trabajo. | Fecha | **Sí** | No | No |
+| **HoraProgramada** | La hora exacta en que el recurso debe ejecutar la tarea. | Detalle preciso del compromiso temporal. | Hora | **Sí** | No | No |
+| **Estado** | Indica la situación actual del cupo o tarea. | Monitoreo operativo y control de inventario de cupos (Disponible, Reservado, Usado). | Enumeración (Pendiente, En Ejecución, Finalizado, Cancelado) | **Sí** | No | No |
+| **Resultado** | El resultado final de la interacción con el deudor (registrado vía Data Entry). | Alimentación del archivo bitácora y definición de los pasos siguientes (ej. si se genera un Compromiso de Pago). | Texto | No | No | No |
+
+#### Entidad: PRODUCTO
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
 | :--- | :--- | :--- | :--- |
-| **ES\_ASIGNADO** | RECURSO, GESTION | Recurso (1,N); Gestión (1,1) | Un ticket (gestión) debe ser asignado a uno y solo un recurso para su ejecución. Un recurso puede tener asignadas muchas gestiones. |
+| **PRODUCTO** | Define las características, propiedades y reglas de un bien o servicio financiero (crédito) antes de ser vendido. | Proporcionar la base para la configuración paramétrica de los productos financieros. | Un producto se define por sus componentes y sus atributos dependen de la combinatoria de estos valores. |
 
+### Tabla de Atributos
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codigo\_producto (PK)** | Identificador único del producto de crédito en el catálogo. | Clave Principal (PK). Permite clasificar y relacionar el producto con transacciones y contratos. | Texto | **Sí** | **Sí** | No |
+| **Tipo\_producto** | Clasificación del producto o servicio financiero. | Permite diferenciar los protocolos de entrega y las reglas . | Enumeración (Tarjeta de crédito, Crédito hipotecario, Préstamo) | **Sí** | No | No |
+| **Descripcion** | Nombre descriptivo del producto. | Claridad y documentación. | Texto | **Sí** | No | No |
+| **Tasa\_interes** | Tasa de dinero a ser aplicada al crédito. | Parámetro financiero clave para la liquidación. | Porcentaje | **Sí** | No | No |
+| **Moneda** | Especifica la unidad monetaria en la que se cotiza el producto. | Necesario para la integridad y coherencia de los datos financieros. | Enumeración (PEN, USD) | **Sí** | No | No |
+| **Valor** | Valor monetario principal del producto, típicamente el monto nominal del crédito o el precio base del servicio. | Definición de los límites y rangos financieros. | Dinero | **Sí** | No | No |
+
+#### Entidad Relación: CONTRATO_PRODUCTO (Acuerdo/Términos)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **CONTRATO\_PRODUCTO** | Representa el acuerdo legal o convenio que establece los términos bajo los cuales el cliente accede al producto de crédito. | Registrar los términos específicos y la vigencia del acuerdo entre el cliente y la empresa, fundamental para la auditoría y la gestión de cobranza. | La vigencia del contrato es crucial para determinar si la obligación está activa o vencida, afectando la mora. |
+
+### Tabla de Atributos
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codigo\_contrato (PK)** | Identificador único del contrato o acuerdo de servicio. | Clave Principal (PK). | Numérico | **Sí** | **Sí** | No |
+| **Codigo\_cliente (FK)** | Referencia al cliente que firma el contrato. | Clave Foránea implícita (necesaria para la relación). | Texto  | **Sí** | No | No |
+| **Codigo\_producto (FK)** | Referencia al producto financiero asociado al contrato. | Clave Foránea implícita (necesaria para la relación). | Texto  | **Sí** | No | No |
+| **Fecha\_contrato** | Fecha en la que el acuerdo entró en vigencia. | Define el inicio de la validez del contrato. | Fecha | **Sí** | No | No |
+| **Fecha\_vencimiento** | Fecha en la que el contrato o sus términos expiran. | Establece el límite legal de la obligación. | Fecha  | No | No | No |
+
+
+#### Entidad Relación: PROGRAMACION_TICKET (Lote de Programación)
+
+| Nombre | Descripción | Propósito | Reglas de Negocio Relevantes |
+| :--- | :--- | :--- | :--- |
+| **PROGRAMACION\_TICKET** | Entidad que organiza y documenta el lote o proceso Batch mediante el cual se generaron los cupos (TICKET). | CU 6: Permite la trazabilidad del proceso masivo de Generación de Tickets (programación) y sirve como cabecera para el control de integridad del Batch (ej. CHECKPOINT). | La programación de tickets se realiza con mucha anticipación y en procesos Batch que deben asegurar la disponibilidad de recursos en las fechas futuras. |
+
+### Tabla de Atributos
+
+| Atributo | Descripción | Propósito | Dominio de Valores | Obligatoriedad | Unicidad | Multivaluado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codigo\_programacion (PK)** | Identificador único del lote o evento creador de los tickets. | Clave Principal (PK). | Numérico | **Sí** | **Sí** | No |
+| **Codigo\_ticket (FK)** | Referencia al ticket individual generado en este lote. | Clave Foránea implícita. | Numérico | **Sí** | No | No |
+| **Fecha\_programada** | Fecha en la que se ejecutó el proceso de planificación (Batch) o la fecha de aplicación del calendario de programación. | Punto de tiempo crucial para la auditoría y re-arranque del proceso Batch. | Fecha | **Sí** | No | No |
+| **Estado\_Batch** | Estado del proceso Batch de generación (ej. 'Completo', 'Fallo', 'Pendiente') | Control del proceso masivo. | Enumeración | **Sí** | No | No |
 
 
 # Diseño Lógico y Esquema Relacional del Módulo Programación de Recursos de Cobranza
